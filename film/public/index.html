@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Film Uploader Sécurisé</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #222; color: #eee; margin: 0; padding: 0; }
+    .container { max-width: 400px; margin: 40px auto; background: #333; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px #0008; }
+    h1 { text-align: center; }
+    form { margin-bottom: 1.5em; }
+    label { display: block; margin-bottom: 0.5em; }
+    input[type="text"], input[type="password"], input[type="file"] { width: 100%; padding: 0.5em; margin-bottom: 1em; border-radius: 4px; border: none; }
+    button { width: 100%; padding: 0.7em; background: #0a84ff; color: #fff; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
+    button:hover { background: #005bb5; }
+    .hidden { display: none; }
+    .message { margin-bottom: 1em; padding: 0.7em; border-radius: 4px; }
+    .error { background: #b00020; color: #fff; }
+    .success { background: #007e33; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Film Uploader</h1>
+    <div id="messages"></div>
+    <form id="loginForm">
+      <label for="login">Login</label>
+      <input type="text" id="login" required>
+      <label for="password">Mot de passe</label>
+      <input type="password" id="password" required>
+      <button type="submit">Connexion</button>
+    </form>
+    <form id="twofaForm" class="hidden">
+      <label for="code">Code 2FA</label>
+      <input type="text" id="code" required>
+      <button type="submit">Valider 2FA</button>
+    </form>
+    <form id="uploadForm" class="hidden" enctype="multipart/form-data">
+      <label for="video">Vidéo (max 5 Go)</label>
+      <input type="file" id="video" accept="video/*" required>
+      <button type="submit">Uploader</button>
+    </form>
+    <button id="logoutBtn" class="hidden">Déconnexion</button>
+  </div>
+  <script>
+    let token = null;
+    const loginForm = document.getElementById('loginForm');
+    const twofaForm = document.getElementById('twofaForm');
+    const uploadForm = document.getElementById('uploadForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const messages = document.getElementById('messages');
+
+    function showMessage(msg, type = 'error') {
+      messages.innerHTML = `<div class="message ${type}">${msg}</div>`;
+    }
+    function clearMessage() { messages.innerHTML = ''; }
+
+    loginForm.onsubmit = async e => {
+      e.preventDefault(); clearMessage();
+      const login = document.getElementById('login').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loginForm.classList.add('hidden');
+        twofaForm.classList.remove('hidden');
+        showMessage('Entrez le code 2FA', 'success');
+      } else {
+        showMessage(data.error || 'Erreur');
+      }
+    };
+
+    twofaForm.onsubmit = async e => {
+      e.preventDefault(); clearMessage();
+      const code = document.getElementById('code').value;
+      const res = await fetch('/auth/2fa', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        token = data.token;
+        twofaForm.classList.add('hidden');
+        uploadForm.classList.remove('hidden');
+        logoutBtn.classList.remove('hidden');
+        showMessage('Connecté !', 'success');
+      } else {
+        showMessage(data.error || 'Erreur 2FA');
+      }
+    };
+
+    uploadForm.onsubmit = async e => {
+      e.preventDefault(); clearMessage();
+      const file = document.getElementById('video').files[0];
+      if (!file) return showMessage('Aucun fichier sélectionné');
+      if (file.size > 5368709120) return showMessage('Fichier trop volumineux (max 5 Go)');
+      const formData = new FormData();
+      formData.append('video', file);
+      const res = await fetch('/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage('Upload réussi : ' + data.filename, 'success');
+      } else {
+        showMessage(data.error || 'Erreur upload');
+      }
+    };
+
+    logoutBtn.onclick = async () => {
+      await fetch('/auth/logout', { method: 'POST' });
+      token = null;
+      uploadForm.classList.add('hidden');
+      logoutBtn.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+      twofaForm.classList.add('hidden');
+      clearMessage();
+    };
+  </script>
+</body>
+</html> 
