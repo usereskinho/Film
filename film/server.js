@@ -51,7 +51,7 @@ app.use(session({
 }));
 
 // Protection CSRF
-app.use(csrf());
+// app.use(csrf());
 
 // Dossier d'upload sécurisé (création si inexistant)
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
